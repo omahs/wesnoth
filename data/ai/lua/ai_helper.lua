@@ -1576,7 +1576,7 @@ function ai_helper.get_reachmap(unit, cfg)
         end
 
         if is_available then
-            reachmap:insert(loc[1], loc[2], loc[3])
+            reachmap:insert(loc.x, loc.y, loc.moves_left)
         end
     end
 
