@@ -31,9 +31,10 @@ local ai_helper = {}
 
 ----- Debugging helper functions ------
 
+---Prints out a representation of an HP distribution table
+---@param hp_distribution table<integer, number> The HP distribution table, for example from wesnoth.simulate_combat
+---@param print? function Optional print function. Pass std_print if you prefer output to the console. Any other function taking a single argument will also work.
 function ai_helper.print_hp_distribution(hp_distribution, print)
-    -- You can pass std_print as the second argument if you prefer output to the console
-    -- Any other function taking a single argument will also work.
     print = print or _G.print
     -- hp_distribution is sort of an array, but unlike most Lua arrays it's 0-index
     for i = 0, #hp_distribution - 1 do
@@ -43,33 +44,35 @@ function ai_helper.print_hp_distribution(hp_distribution, print)
     end
 end
 
+---Returns true or false (hard-coded). To be used to show messages if in debug mode.
+---@return boolean
 function ai_helper.show_messages()
-    -- Returns true or false (hard-coded). To be used to
-    -- show messages if in debug mode.
     -- Just edit the following line (easier than trying to set WML variable)
     local show_messages_flag = false
     if wesnoth.game_config.debug then return show_messages_flag end
     return false
 end
 
+---Returns true or false (hard-coded). To be used to show which CA is being executed if in debug mode.
+---@return boolean
 function ai_helper.print_exec()
-    -- Returns true or false (hard-coded). To be used to
-    -- show which CA is being executed if in debug mode.
     -- Just edit the following line (easier than trying to set WML variable)
     local print_exec_flag = false
     if wesnoth.game_config.debug then return print_exec_flag end
     return false
 end
 
+---Returns true or false (hard-coded). To be used to show which CA is being evaluated if in debug mode.
+---@return boolean
 function ai_helper.print_eval()
-    -- Returns true or false (hard-coded). To be used to
-    -- show which CA is being evaluated if in debug mode.
     -- Just edit the following line (easier than trying to set WML variable)
     local print_eval_flag = false
     if wesnoth.game_config.debug then return print_eval_flag end
     return false
 end
 
+---@param start_time integer
+---@param ca_name string
 function ai_helper.done_eval_messages(start_time, ca_name)
     ca_name = ca_name or 'unknown'
     if ai_helper.print_eval() then
@@ -77,24 +80,25 @@ function ai_helper.done_eval_messages(start_time, ca_name)
     end
 end
 
+---Clear all labels on a map
 function ai_helper.clear_labels()
-    -- Clear all labels on a map
     for x, y in wesnoth.current.map:iter(true) do
         M.add_label { x = x, y = y, text = "" }
     end
 end
 
+---@class ai_debug_label_opts
+---@field show_coords? boolean Use hex coordinates as labels instead of value
+---@field factor? number If value is a number, multiply by this factor
+---@field keys? any[] If the value to be displayed is a subelement of the LS data, use these keys to access it. For example, if we want to display data[3], set keys = { 3 }; if we want data.arg[3], set keys = { 'arg', 3 }
+---@field clear? boolean if set to 'false', do not clear existing labels
+---@field color? color the color to be used for the output
+
+---Take map (location set) and put labels containing 'value' onto the map
+---Print 'nan' if element exists but is not a number.
+---@param map location_set The labels to place on the map.
+---@param cfg ai_debug_label_opts table with optional configuration parameters:
 function ai_helper.put_labels(map, cfg)
-    -- Take @map (location set) and put label containing 'value' onto the map.
-    -- Print 'nan' if element exists but is not a number.
-    -- @cfg: table with optional configuration parameters:
-    --   - show_coords: (boolean) use hex coordinates as labels instead of value
-    --   - factor=1: (number) if value is a number, multiply by this factor
-    --   - keys: (array) if the value to be displayed is a subelement of the LS data,
-    --     use these keys to access it. For example, if we want to display data[3]
-    --     set keys = { 3 }, if it's data.arg[3], set keys = { 'arg', 3 }
-    --   - clear=true: (boolean) if set to 'false', do not clear existing labels
-    --   - color=nil: (string) the color string to be used for the output
 
     cfg = cfg or {}
     local factor = cfg.factor or 1
@@ -125,10 +129,11 @@ function ai_helper.put_labels(map, cfg)
     end)
 end
 
+---Print arguments preceded by a time stamp in seconds.
+---Also return that time stamp
+---@param ... unknown
+---@return number
 function ai_helper.print_ts(...)
-    -- Print arguments preceded by a time stamp in seconds
-    -- Also return that time stamp
-
     local ts = wesnoth.ms_since_init() / 1000.
 
     local arg = { ... }
@@ -139,13 +144,14 @@ function ai_helper.print_ts(...)
     return ts
 end
 
+---Same as ai_helper.print_ts(), but also adds time elapsed since
+---the time given in the first argument (in seconds)
+---Returns time stamp as well as time elapsed
+---@param start_time integer Time stamp in seconds as returned by wesnoth.ms_since_init / 1000.
+---@param ... unknown
+---@return number
+---@return number
 function ai_helper.print_ts_delta(start_time, ...)
-    -- @start_time: time stamp in seconds as returned by wesnoth.ms_since_init / 1000.
-
-    -- Same as ai_helper.print_ts(), but also adds time elapsed since
-    -- the time given in the first argument (in seconds)
-    -- Returns time stamp as well as time elapsed
-
     local ts = wesnoth.ms_since_init() / 1000.
     local delta = ts - start_time
 
@@ -1342,27 +1348,24 @@ function ai_helper.enemy_moves()
     return enemy_moves
 end
 
-function ai_helper.next_hop(unit, x, y, cfg)
-    -- Finds the next "hop" of @unit on its way to (@x,@y)
-    -- Returns coordinates of the endpoint of the hop (or nil if no path to
-    -- (x,y) is found for the unit), and movement cost to get there.
-    -- Only unoccupied hexes are considered
-    -- @cfg: standard extra options for wesnoth.paths.find_path()
-    --   including:
-    --     viewing_side: see comments at beginning of this file. Defaults to side of @unit
-    --     ignore_visibility: see comments at beginning of this file. Defaults to nil.
-    --   plus:
-    --     ignore_own_units: if set to true, then own units that can move out of the way are ignored
-    --     path: if given, find the next hop along this path, rather than doing new path finding
-    --       In this case, it is assumed that the path is possible, in other words, that cost has been checked
-    --     avoid_map: a location set with the hexes the unit is not allowed to step on
-    --     fan_out=true: prior to Wesnoth 1.16, the unit strictly followed the path, which can lead to
-    --       a line-up of units if there are allied units in the way (e.g. when multiple units are
-    --       moved by the same candidate action. Now they fan out instead, trying to get as close to
-    --       the ideal next_hop goal (defined as where the unit could get if there were no allied units
-    --       in the way) as possible. Setting 'fan_out=false' restores the old behavior. The main
-    --       disadvantage of the new method is that it needs to do more path finding and therefore takes longer.
+---@class ai_next_hop_opts : path_options
+---@field ignore_visibility? boolean See comment at top of file
+---@field ignore_own_units? boolean If set to true, then own units that can move out of the way are ignored.
+---@field path? location[] If given, find the next hop along this path, rather than doing new path finding In this case, it is assumed that the path is possible, in other words, that cost has been checked.
+---@field avoid_map? location_set A location set with the hexes the unit is not allowed to step on.
+---@field fan_out? boolean Prior to Wesnoth 1.16, the unit strictly followed the path, which can lead to a line-up of units if there are allied units in the way (e.g. when multiple units are moved by the same candidate action. Now they fan out instead, trying to get as close to the ideal next_hop goal (defined as where the unit could get if there were no allied units in the way) as possible. Setting 'fan_out=false' restores the old behavior. The main disadvantage of the new method is that it needs to do more path finding and therefore takes longer.
 
+---Finds the next "hop" of @unit on its way to (@x,@y)
+---Returns coordinates of the endpoint of the hop (or nil if no path to
+---(x,y) is found for the unit), and movement cost to get there.
+---Only unoccupied hexes are considered
+---@param unit unit The unit who's moving
+---@param x integer Destination X coordinate
+---@param y integer Destination Y coordinate
+---@param cfg? ai_next_hop_opts Extra options, most of which are passed through to wesnoth.paths.find_path()
+---@return location?
+---@return integer
+function ai_helper.next_hop(unit, x, y, cfg)
     local viewing_side = cfg and cfg.viewing_side or unit.side
     ai_helper.check_viewing_side(viewing_side)
     local ignore_visibility = cfg and cfg.ignore_visibility
@@ -1587,9 +1590,12 @@ function ai_helper.get_reachmap(unit, cfg)
     return reachmap
 end
 
+---Same as ai_helper.get_reachmap with exclude_occupied = true
+---This function is now redundant, but we keep it for backward compatibility.
+---@param unit unit
+---@param cfg table
+---@return location_set
 function ai_helper.get_reachable_unocc(unit, cfg)
-    -- Same as ai_helper.get_reachmap with exclude_occupied = true
-    -- This function is now redundant, but we keep it for backward compatibility.
 
     local cfg_GRU = cfg and ai_helper.table_copy(cfg) or {}
     cfg_GRU.exclude_occupied = true
@@ -1597,11 +1603,17 @@ function ai_helper.get_reachable_unocc(unit, cfg)
     return ai_helper.get_reachmap(unit, cfg_GRU)
 end
 
+---@class shrouded_path_opts : path_options
+---@field ignore_visibility? boolean See comment at the top of file
+
+---Same as wesnoth.paths.find_path, just that it works under shroud as well while still ignoring invisible units. It does this by using ignore_visibility=true and taking invisible units off the map for the path finding process.
+---@param unit unit The unit who wants to move.
+---@param x integer Destination X coordinate.
+---@param y integer Destination Y coordinate.
+---@param cfg? shrouded_path_opts
+---@return location[]
+---@return integer
 function ai_helper.find_path_with_shroud(unit, x, y, cfg)
-    -- Same as wesnoth.paths.find_path, just that it works under shroud as well while still
-    -- ignoring invisible units. It does this by using ignore_visibility=true and taking
-    -- invisible units off the map for the path finding process.
-    --
     -- Notes on some of the optional parameters that can be passed in @cfg:
     --  - viewing_side: If not given, use side of the unit (not the current side!)
     --    for determining which units are hidden and need to be extracted, as that
