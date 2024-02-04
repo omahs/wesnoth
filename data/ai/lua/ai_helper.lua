@@ -528,11 +528,10 @@ function ai_helper.get_LS_xy(index)
     -- Get the x,y coordinates for the index of a location set
     -- For some reason, there doesn't seem to be a LS function for this
 
-    local tmp_set = LS.create()
-    tmp_set.values[index] = 1
+    local tmp_set = LS.of_raw{[index] = true}
     local xy = tmp_set:to_pairs()[1]
 
-    return xy[1], xy[2]
+    return xy.x, xy.y
 end
 
 --------- Location, position or hex related helper functions ----------
