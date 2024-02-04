@@ -933,10 +933,7 @@ function ai_helper.split_location_list_to_strings(list)
         locsx[i] = loc[1]
         locsy[i] = loc[2]
     end
-    locsx = table.concat(locsx, ",")
-    locsy = table.concat(locsy, ",")
-
-    return locsx, locsy
+    return table.concat(locsx, ","), table.concat(locsy, ",")
 end
 
 function ai_helper.get_avoid_map(ai, avoid_tag, use_ai_aspect, default_avoid_tag)
