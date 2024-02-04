@@ -440,7 +440,7 @@ function ca_bottleneck_move:evaluation(cfg, data)
     else
         -- If there's another unit in the best location, moving it out of the way becomes the best move
         local unit_in_way = wesnoth.units.find_on_map { x = best_hex[1], y = best_hex[2],
-            { "not", { id = best_unit.id } }
+            wml.tag["not"] { id = best_unit.id }
         }[1]
         if (not AH.is_visible_unit(wesnoth.current.side, unit_in_way)) then
             unit_in_way = nil
