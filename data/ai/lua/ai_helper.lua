@@ -1306,7 +1306,7 @@ function ai_helper.my_moves()
     --   [1] = { dst = { x = 7, y = 16 },
     --           src = { x = 6, y = 16 } }
 
-    local dstsrc = ai.get_dstsrc()
+    local dstsrc = ai.get_dst_src()
 
     local my_moves = {}
     for key,value in pairs(dstsrc) do
@@ -1325,7 +1325,7 @@ function ai_helper.enemy_moves()
     --   [1] = { dst = { x = 7, y = 16 },
     --           src = { x = 6, y = 16 } }
 
-    local dstsrc = ai.get_enemy_dstsrc()
+    local dstsrc = ai.get_enemy_dst_src()
 
     local enemy_moves = {}
     for key,value in pairs(dstsrc) do
