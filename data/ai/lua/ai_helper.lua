@@ -288,36 +288,26 @@ function ai_helper.checked_stopunit_moves(ai, unit)
     return ai.stopunit_moves(unit)
 end
 
-function ai_helper.robust_move_and_attack(ai, src, dst, target_loc, cfg)
-    -- Perform a move and/or attack with an AI unit in a way that is robust against
-    -- unexpected outcomes such as being ambushed or changes caused by WML events.
-    -- As much as possible, this function also tries to ensure that the gamestate
-    -- is changed in case an action turns out to be impossible due to such an
-    -- unexpected outcome.
-    --
-    -- Required input parameters:
-    -- @ai: the Lua ai table
-    -- @src: current coordinates of the AI unit to be used
-    -- @dst: coordinates to which the unit should move. This does not have to be
-    --   different from @src. In fact, the unit does not even need to have moves
-    --   left, as long as an attack is specified in the latter case. If another
-    --   AI unit is at @dst, it is moved out of the way.
-    --
-    -- Optional parameters:
-    -- @target_loc: coordinates of the enemy unit to be attacked. If not given, no
-    --   attack is attempted.
-    -- @cfg: table with optional configuration parameters:
-    --   partial_move: By default, this function performs full moves. If this
-    --     parameter is true, a partial move is done instead.
-    --   weapon: The number (starting at 1) of the attack weapon to be used.
-    --     If omitted, the best weapon is automatically selected.
-    --   avoid_map (location set): if given, the hexes in avoid_map are excluded
-    --     This is only used for passing through to move_unit_out_of_way. It is assumed
-    --     that @dst has been checked to lie outside areas to avoid.
-    --   all optional parameters for ai_helper.move_unit_out_of_way()
+---@class robust_move_opts : move_out_of_way_opts
+---@field partial_move boolean By default, this function performs full moves. If this parameter is true, a partial move is done instead.
+---@field weapon integer The number (starting at 1) of the attack weapon to be used. If omitted, the best weapon is automatically selected.
 
+---Perform a move and/or attack with an AI unit in a way that is robust against
+---unexpected outcomes such as being ambushed or changes caused by WML events.
+---As much as possible, this function also tries to ensure that the gamestate
+---is changed in case an action turns out to be impossible due to such an
+---unexpected outcome.
+---@param ai ailib The ai module
+---@param src location current coordinates of the AI unit to be used
+---@param dst location coordinates to which the unit should move. This does not have to be different from src. In fact, the unit does not even need to have moves left, as long as an attack is specified in the latter case. If another AI unit is at dst, it is moved out of the way.
+---@param target_loc? location Coordinates of the enemy unit to be attacked. If not given, no attack is attempted.
+---@param cfg? robust_move_opts Additional configuration options
+---@return table
+function ai_helper.robust_move_and_attack(ai, src, dst, target_loc, cfg)
     -- Notes:
-    -- - @src, @dst and @target_loc can be any table (including proxy units) that contains
+    -- - If an avoid_map is given in the options table, it is assumed that dst has been
+    --   checked to lie outside the area to avoid.
+    -- - src, dst and target_loc can be any table (including proxy units) that contains
     --   the coordinates of the respective locations using either indices .x/.y or [1]/[2].
     --   If both are given, .x/.y takes precedence over [1]/[2].
     -- - This function only safeguards AI moves against outcomes that the AI cannot know
@@ -476,26 +466,34 @@ end
 
 ----- General functionality and maths helper functions ------
 
+---Make a copy of a table (rather than just another pointer to the same table)
+---Note: This is only a shallow copy. Any nested references to tables, including WML tags,
+---will still remain as a reference to the original table.
+---@param t table
+---@return table
 function ai_helper.table_copy(t)
-    -- Make a copy of a table (rather than just another pointer to the same table)
     local copy = {}
     for k,v in pairs(t) do copy[k] = v end
     return copy
 end
 
+---Merge two arrays without overwriting @a1 or @a2 -> create a new table
+---This only works with arrays, not general tables
+---@param a1 table
+---@param a2 table
+---@return table
 function ai_helper.array_merge(a1, a2)
-    -- Merge two arrays without overwriting @a1 or @a2 -> create a new table
-    -- This only works with arrays, not general tables
     local merger = {}
     for _,a in pairs(a1) do table.insert(merger, a) end
     for _,a in pairs(a2) do table.insert(merger, a) end
     return merger
 end
 
+---Convert input to a string in a format corresponding to the type of input
+---The string is all put into one line
+---@param input any
+---@return string
 function ai_helper.serialize(input)
-    -- Convert @input to a string in a format corresponding to the type of @input
-    -- The string is all put into one line
-
     local str = ''
     if (type(input) == "number") or (type(input) == "boolean") then
         str = tostring(input)
@@ -516,9 +514,11 @@ function ai_helper.serialize(input)
     return str
 end
 
+---Split string str into a table using the delimiter sep (default: ',')
+---@param str string
+---@param sep string
+---@return table
 function ai_helper.split(str, sep)
-    -- Split string @str into a table using the delimiter @sep (default: ',')
-
     sep = sep or ","
     local fields = {}
     local pattern = string.format("([^%s]+)", sep)
@@ -530,10 +530,12 @@ ai_helper.split = wesnoth.deprecate_api('ai_helper.split', 'stringx.split', 3, '
 
 --------- Location set related helper functions ----------
 
+---Get the x,y coordinates for the index of a location set
+---For some reason, there doesn't seem to be a LS function for this
+---@param index integer
+---@return integer
+---@return integer
 function ai_helper.get_LS_xy(index)
-    -- Get the x,y coordinates for the index of a location set
-    -- For some reason, there doesn't seem to be a LS function for this
-
     local tmp_set = LS.of_raw{[index] = true}
     local xy = tmp_set:to_pairs()[1]
 
@@ -542,18 +544,25 @@ end
 
 --------- Location, position or hex related helper functions ----------
 
+---Converts coordinates from hex geometry to cartesian coordinates,
+---meaning that y coordinates are offset by 0.5 every other hex
+---Example: (1,1) stays (1,1) and (3,1) remains (3,1), but (2,1) -> (2,1.5) etc.
+---@param x integer
+---@param y integer
+---@return number
+---@return number
 function ai_helper.cartesian_coords(x, y)
-    -- Converts coordinates from hex geometry to cartesian coordinates,
-    -- meaning that y coordinates are offset by 0.5 every other hex
-    -- Example: (1,1) stays (1,1) and (3,1) remains (3,1), but (2,1) -> (2,1.5) etc.
     return x, y + ((x + 1) % 2) / 2.
 end
 
+---Returns the angle of the direction from @from_hex to @to_hex
+---Angle is in radians and goes from -pi to pi. 0 is toward east.
+---Input hex tables can be of form { x, y } or { x = x, y = y }, which
+---means that it is also possible to pass a unit table
+---@param from_hex location
+---@param to_hex location
+---@return number
 function ai_helper.get_angle(from_hex, to_hex)
-    -- Returns the angle of the direction from @from_hex to @to_hex
-    -- Angle is in radians and goes from -pi to pi. 0 is toward east.
-    -- Input hex tables can be of form { x, y } or { x = x, y = y }, which
-    -- means that it is also possible to pass a unit table
     local x1, y1 = from_hex.x or from_hex[1], from_hex.y or from_hex[2]
     local x2, y2 = to_hex.x or to_hex[1], to_hex.y or to_hex[2]
 
@@ -563,18 +572,17 @@ function ai_helper.get_angle(from_hex, to_hex)
     return math.atan(y2cart - y1cart, x2 - x1)
 end
 
+---Returns an integer index for the direction from from_hex to to_hex
+---with the full circle divided into n slices
+---1 is always to the east, with indices increasing clockwise
+---Input hex tables can be of form { x, y } or { x = x, y = y }, which
+---means that it is also possible to pass a unit table
+---@param from_hex location
+---@param to_hex location
+---@param n integer
+---@param center_on_east? boolean By default, the eastern direction is the northern border of the first slice. If this parameter is set, east will instead be the center direction of the first slice
+---@return integer
 function ai_helper.get_direction_index(from_hex, to_hex, n, center_on_east)
-    -- Returns an integer index for the direction from @from_hex to @to_hex
-    -- with the full circle divided into @n slices
-    -- 1 is always to the east, with indices increasing clockwise
-    -- Input hex tables can be of form { x, y } or { x = x, y = y }, which
-    -- means that it is also possible to pass a unit table
-    --
-    -- Optional input:
-    -- @center_on_east (false): boolean. By default, the eastern direction is the
-    -- northern border of the first slice. If this parameter is set, east will
-    -- instead be the center direction of the first slice
-
     local d_east = 0
     if center_on_east then d_east = 0.5 end
 
@@ -584,27 +592,36 @@ function ai_helper.get_direction_index(from_hex, to_hex, n, center_on_east)
     return index
 end
 
+---@param from_hex location
+---@param to_hex location
+---@return string
 function ai_helper.get_cardinal_directions(from_hex, to_hex)
     local dirs = { "E", "S", "W", "N" }
     return dirs[ai_helper.get_direction_index(from_hex, to_hex, 4, true)]
 end
 
+---@param from_hex location
+---@param to_hex location
+---@return string
 function ai_helper.get_intercardinal_directions(from_hex, to_hex)
     local dirs = { "E", "SE", "S", "SW", "W", "NW", "N", "NE" }
     return dirs[ai_helper.get_direction_index(from_hex, to_hex, 8, true)]
 end
 
+---@param from_hex location
+---@param to_hex location
+---@return string
 function ai_helper.get_hex_facing(from_hex, to_hex)
     local dirs = { "se", "s", "sw", "nw", "n", "ne" }
     return dirs[ai_helper.get_direction_index(from_hex, to_hex, 6)]
 end
 
+---Find the hex that is opposite of hex with respect to center_hex
+---Returns nil if hex and centre_hex are not adjacent.
+---@param hex location
+---@param center_hex location
+---@return location?
 function ai_helper.find_opposite_hex_adjacent(hex, center_hex)
-    -- Find the hex that is opposite of @hex with respect to @center_hex
-    -- Both input hexes are of format { x, y }
-    -- Output: {opp_x, opp_y} -- or nil if @hex and @center_hex are not adjacent
-    --   (or no opposite hex is found, e.g. for hexes on border)
-
     -- If the two input hexes are not adjacent, return nil
     if (M.distance_between(hex, center_hex) ~= 1) then return nil end
 
@@ -623,13 +640,13 @@ function ai_helper.find_opposite_hex_adjacent(hex, center_hex)
     return nil
 end
 
+---Find the hex that is opposite of @hex with respect to @center_hex
+---Using "square coordinate" method by JaMiT
+---Note: this also works for non-adjacent hexes, but might return hexes that are not on the map!
+---@param hex location
+---@param center_hex location
+---@return location
 function ai_helper.find_opposite_hex(hex, center_hex)
-    -- Find the hex that is opposite of @hex with respect to @center_hex
-    -- Using "square coordinate" method by JaMiT
-    -- Note: this also works for non-adjacent hexes, but might return hexes that are not on the map!
-    -- Both input hexes are of format { x, y }
-    -- Output: { opp_x, opp_y }
-
     -- Finding the opposite x position is easy
     local opp_x = center_hex.x + (center_hex.x - hex.x)
 
@@ -644,30 +661,37 @@ function ai_helper.find_opposite_hex(hex, center_hex)
     return wesnoth.named_tuple({opp_x, opp_y}, {'x', 'y'})
 end
 
+---Returns true if hex1 and hex2 are opposite from each other with respect to @center_hex
+---@param hex1 location
+---@param hex2 location
+---@param center_hex location
+---@return boolean
 function ai_helper.is_opposite_adjacent(hex1, hex2, center_hex)
-    -- Returns true if @hex1 and @hex2 are opposite from each other with respect to @center_hex
-
     local opp_hex = ai_helper.find_opposite_hex_adjacent(hex1, center_hex)
 
     if opp_hex and (opp_hex.x == hex2.x) and (opp_hex.y == hex2.y) then return true end
     return false
 end
 
+---Get coordinates for either a named location or from x/y coordinates specified
+---in @cfg. The location can be provided:
+---  - as name: cfg[param_core .. '_loc'] (string)
+---  - or as coordinates: cfg[param_core .. '_x'] and cfg[param_core .. '_y'] (integers)
+---This is the syntax used by many Micro AIs.
+---Exception to this variable name syntax: if param_core = '', then the location
+---variables are 'location_id', 'x' and 'y'
+---
+---An error is raised if the named location does not exist, or if
+---the coordinates are not on the map. In addition, if required_for
+---is provided, an error is also raised if neither a named location
+---nor both coordinates are provided. If required_for is not passed and neither
+---input exists, nil is returned. Omitting required_for does not suppress
+---the other two error conditions.
+---@param param_core string The base name of the key to look up in the config.
+---@param cfg WMLTable The AI configuration to find the location in.
+---@param required_for string A string to be included in the error message in the event of failure.
+---@return location?
 function ai_helper.get_named_loc_xy(param_core, cfg, required_for)
-    -- Get coordinates for either a named location or from x/y coordinates specified
-    -- in @cfg. The location can be provided:
-    --   - as name: cfg[param_core .. '_loc'] (string)
-    --   - or as coordinates: cfg[param_core .. '_x'] and cfg[param_core .. '_y'] (integers)
-    -- This is the syntax used by many Micro AIs.
-    -- Exception to this variable name syntax: if param_core = '', then the location
-    -- variables are 'location_id', 'x' and 'y'
-    --
-    -- Error messages are displayed if the named location does not exist, or if
-    -- the coordinates are not on the map. In addition, if @required_for (a string)
-    -- is provided, an error message is also displayed if neither a named location
-    -- nor both coordinates are provided. If @required_for is not passed and neither
-    -- input exists, nil is returned.
-
     local param_loc = 'location_id'
     if (param_core ~= '') then param_loc = param_core .. '_loc' end
     local loc_id = cfg[param_loc]
@@ -697,12 +721,17 @@ function ai_helper.get_named_loc_xy(param_core, cfg, required_for)
     return nil
 end
 
+---Same as ai_helper.get_named_loc_xy, except that it takes comma separated
+---lists of locations.
+---The result is returned as an array of locations.
+---Empty table is returned if no locations are found.
+---An error is raised if x and y are provided but the sizes don't match.
+---The error conditions in get_named_loc_xy can also be raised.
+---@param param_core string
+---@param cfg WMLTable
+---@param required_for string
+---@return location[]
 function ai_helper.get_multi_named_locs_xy(param_core, cfg, required_for)
-    -- Same as ai_helper.get_named_loc_xy, except that it takes comma separated
-    -- lists of locations.
-    -- The result is returned as an array of locations.
-    -- Empty table is returned if no locations are found.
-
     local locs = {}
     local param_loc = 'location_id'
     if (param_core ~= '') then param_loc = param_core .. '_loc' end
@@ -745,14 +774,13 @@ function ai_helper.get_multi_named_locs_xy(param_core, cfg, required_for)
     return locs
 end
 
+---Returns the same locations array as wesnoth.map.find(location_filter),
+---but excluding hexes on the map border.
+---
+---Note that this might not work if location_filter is a vconfig object.
+---@param location_filter WMLTable
+---@return terrain_hex[]
 function ai_helper.get_locations_no_borders(location_filter)
-    -- Returns the same locations array as wesnoth.map.find(location_filter),
-    -- but excluding hexes on the map border.
-    --
-    -- This is faster than alternative methods, at least with the current
-    -- implementation of standard location filter evaluation by the engine.
-    -- Note that this might not work if @location_filter is a vconfig object.
-
     local old_include_borders = location_filter.include_borders
     location_filter.include_borders = false
     local locs = wesnoth.map.find(location_filter)
@@ -760,14 +788,15 @@ function ai_helper.get_locations_no_borders(location_filter)
     return locs
 end
 
+---Get the location closest to hex (in format { x, y })
+---that matches location_filter (in WML table format)
+---Returns nil if no terrain matching the filter was found
+---@param hex location Anchor location
+---@param location_filter WMLTable Filter to match
+---@param unit? unit Can be passed as an optional third parameter, in which case the terrain needs to be passable for that unit.
+---@param avoid_map? location_set If given, the hexes in avoid_map are excluded
+---@return terrain_hex?
 function ai_helper.get_closest_location(hex, location_filter, unit, avoid_map)
-    -- Get the location closest to @hex (in format { x, y })
-    -- that matches @location_filter (in WML table format)
-    -- @unit can be passed as an optional third parameter, in which case the
-    -- terrain needs to be passable for that unit
-    -- @avoid_map (location set): if given, the hexes in avoid_map are excluded
-    -- Returns nil if no terrain matching the filter was found
-
     -- Find the maximum distance from 'hex' that's possible on the map
     local max_distance = 0
     local map = wesnoth.current.map
@@ -825,16 +854,16 @@ function ai_helper.get_closest_location(hex, location_filter, unit, avoid_map)
     return nil
 end
 
+---Finds all locations matching location_filter that are passable for
+---the unit. This also excludes hexes on the map border.
+---@param location_filter WMLTable Filter
+---@param unit unit Unit to check passability; if omitted, all hexes matching the filter, but excluding border hexes are returned
+---@return terrain_hex[]
 function ai_helper.get_passable_locations(location_filter, unit)
-    -- Finds all locations matching @location_filter that are passable for
-    -- @unit. This also excludes hexes on the map border.
-    -- @unit is optional: if omitted, all hexes matching the filter, but
-    -- excluding border hexes are returned
-
     -- All hexes that are not on the map border
     local all_locs = ai_helper.get_locations_no_borders(location_filter)
 
-    -- If @unit is provided, exclude terrain that's impassable for the unit
+    -- If a unit is provided, exclude terrain that's impassable for the unit
     if unit then
         local locs = {}
         for _,loc in ipairs(all_locs) do
@@ -847,9 +876,10 @@ function ai_helper.get_passable_locations(location_filter, unit)
     return all_locs
 end
 
+---Finds all locations matching @location_filter that provide healing, excluding border hexes.
+---@param location_filter WMLTable
+---@return terrain_hex[]
 function ai_helper.get_healing_locations(location_filter)
-    -- Finds all locations matching @location_filter that provide healing, excluding border hexes.
-
     local all_locs = ai_helper.get_locations_no_borders(location_filter)
 
     local locs = {}
@@ -862,11 +892,13 @@ function ai_helper.get_healing_locations(location_filter)
     return locs
 end
 
+---Get the distance map DM for specified units (as a location set)
+---DM = sum ( distance_from_unit )
+---This is done for all elements of map (a location set), or for the entire map if map is not given
+---@param units unit[]
+---@param map? location_set
+---@return location_set
 function ai_helper.distance_map(units, map)
-    -- Get the distance map DM for all units in @units (as a location set)
-    -- DM = sum ( distance_from_unit )
-    -- This is done for all elements of @map (a locations set), or for the entire map if @map is not given
-
     local DM = LS.create()
 
     if map then
@@ -890,11 +922,13 @@ function ai_helper.distance_map(units, map)
     return DM
 end
 
+---Get the inverse distance map IDM for specified units (as a location set)
+---IDM = sum ( 1 / (distance_from_unit+1) )
+---This is done for all elements of map (a location set), or for the entire map if map is not given
+---@param units unit[]
+---@param map? location_set
+---@return location_set
 function ai_helper.inverse_distance_map(units, map)
-    -- Get the inverse distance map IDM for all units in @units (as a location set)
-    -- IDM = sum ( 1 / (distance_from_unit+1) )
-    -- This is done for all elements of @map (a locations set), or for the entire map if @map is not given
-
     local IDM = LS.create()
     if map then
         map:iter(function(x, y, data)
@@ -917,10 +951,14 @@ function ai_helper.inverse_distance_map(units, map)
     return IDM
 end
 
+---Determines distance of (x1,y1) from (x2,y2) even if
+---x2 and y2 are not necessarily both given (or not numbers)
+---@param x1 integer
+---@param y1 integer
+---@param x2 integer?
+---@param y2 integer?
+---@return integer
 function ai_helper.generalized_distance(x1, y1, x2, y2)
-    -- Determines distance of (@x1,@y1) from (@x2,@y2) even if
-    -- @x2 and @y2 are not necessarily both given (or not numbers)
-
     -- Return 0 if neither is given
     if (not x2) and (not y2) then return 0 end
 
@@ -932,10 +970,13 @@ function ai_helper.generalized_distance(x1, y1, x2, y2)
     return M.distance_between(x1, y1, x2, y2)
 end
 
+---Convert a list of locations as returned by wesnoth.map.find into a pair of strings
+---suitable for passing in as x,y coordinate lists to wesnoth.map.find.
+---Could alternatively convert to a WML table and use the find_in argument, but this is simpler.
+---@param list location[]
+---@return string #All the X coordinates as a comma-separated list
+---@return string #All the Y coordinates as a comma-separated list
 function ai_helper.split_location_list_to_strings(list)
-    -- Convert a list of locations @list as returned by wesnoth.map.find into a pair of strings
-    -- suitable for passing in as x,y coordinate lists to wesnoth.map.find.
-    -- Could alternatively convert to a WML table and use the find_in argument, but this is simpler.
     local locsx, locsy = {}, {}
     for i,loc in ipairs(list) do
         locsx[i] = loc.x
@@ -944,15 +985,19 @@ function ai_helper.split_location_list_to_strings(list)
     return table.concat(locsx, ","), table.concat(locsy, ",")
 end
 
+---Returns a location set of hexes to be avoided by the AI. Information about
+---these hexes can be provided in different ways:
+---1. If avoid_tag is passed, we always use that. An example of this is when a
+---   Micro AI configuration contains an [avoid] tag
+---2. If use_ai_aspect (boolean) is set, we use the avoid aspect of the default AI.
+---3. default_avoid_tag is used when avoid_tag is not passed and either
+---   use_ai_aspect == false or the default AI aspect is not set.
+---@param ai ailib
+---@param avoid_tag WMLTable A location filter loaded from the MicroAI configuration
+---@param use_ai_aspect boolean Whether to check the default AI avoid aspect
+---@param default_avoid_tag WMLTable A hard-coded location filter to use if the aspect is not set
+---@return location_set
 function ai_helper.get_avoid_map(ai, avoid_tag, use_ai_aspect, default_avoid_tag)
-    -- Returns a location set of hexes to be avoided by the AI. Information about
-    -- these hexes can be provided in different ways:
-    -- 1. If @avoid_tag is passed, we always use that. An example of this is when a
-    --    Micro AI configuration contains an [avoid] tag
-    -- 2. If @use_ai_aspect (boolean) is set, we use the avoid aspect of the default AI.
-    -- 3. @default_avoid_tag is used when @avoid_tag is not passed and either
-    --    @use_ai_aspect == false or the default AI aspect is not set.
-
     if avoid_tag then
         return LS.of_pairs(wesnoth.map.find(avoid_tag))
     end
@@ -1885,6 +1930,12 @@ function ai_helper.find_best_move(units, rating_function, cfg)
     return best_hex, best_unit, max_rating
 end
 
+---@class move_out_of_way_opts : reach_options
+
+---
+---@param ai ailib
+---@param unit unit
+---@param cfg move_out_of_way_opts
 function ai_helper.move_unit_out_of_way(ai, unit, cfg)
     -- Move @unit to the best close location.
     -- Main rating is the moves the unit still has left after that
