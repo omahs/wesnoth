@@ -123,7 +123,7 @@ end
 function wct_map_yard(directions, counter_directions)
 	-- todo: is this code 'symmetric' andin the sense that switching
 	--       directions and counter_directions  doesn't change anythign at all?
-	local terrain_to_change = map:find(wesnoth.map.filter(f.all(
+	local terrain_to_change = map:find(f.all(
 		f.terrain("Gg"),
 		f.adjacent(f.terrain("Gg"), directions, 3),
 		f.any(
@@ -133,7 +133,7 @@ function wct_map_yard(directions, counter_directions)
 				f.adjacent(f.terrain("Gg^Vl"))
 			), directions, nil)
 		)
-	)))
+	))
 
 	if #terrain_to_change > 0 then
 		local loc = terrain_to_change[mathx.random(#terrain_to_change)]
@@ -145,10 +145,10 @@ function wct_map_yard(directions, counter_directions)
 end
 
 function wct_conect_isolated_citadel()
-	local isolated = map:find(wesnoth.map.filter(f.all(
+	local isolated = map:find(f.all(
 		f.terrain("Rr*^*,Ch,Kh,W*^Bsb*"),
 		f.adjacent(f.terrain("R*^*,Ch,Kh,W*^Bsb*"), nil, 0)
-	)))
+	))
 	set_terrain { "Rr",
 		f.all(
 			f.terrain("Gg"),
@@ -165,12 +165,12 @@ function wct_conect_isolated_citadel()
 end
 
 function wct_store_empty_citadel()
-	return map:find(wesnoth.map.filter(f.all(
+	return map:find(f.all(
 		f.terrain("Rr"),
 		f.none(
 			f.radius(4, f.terrain("Rr^Vhc"), f.terrain("Rr*^*,Ch*,Kh*,W*^Bsb*"))
 		)
-	)))
+	))
 
 end
 
@@ -186,7 +186,7 @@ function wct_map_decoration_3e_keeps()
 end
 
 function wct_map_decoration_3e_leantos()
-	local terrain_to_change = map:find(wesnoth.map.filter(f.all(
+	local terrain_to_change = map:find(f.all(
 		f.terrain("Rr"),
 		f.none(
 			f.find_in("bonus_point")
@@ -200,7 +200,7 @@ function wct_map_decoration_3e_leantos()
 			)),
 			f.adjacent(f.terrain("Ch,Rr^*"), nil, "5-6")
 		)
-	)))
+	))
 	for i, v in ipairs(terrain_to_change) do
 		if mathx.random(3) == 1 then
 			map[v] = "Rrc"
