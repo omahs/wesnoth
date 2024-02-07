@@ -41,4 +41,6 @@ namespace lua_formula_bridge {
 		wfl::variant evaluate(const wfl::formula_callable& variables, wfl::formula_debugger* fdb = nullptr) const;
 	};
 
+	using fpointer = std::unique_ptr<fwrapper, std::function<void(fwrapper*)>>;
 } // end namespace lua_formula_bridge
+lua_formula_bridge::fpointer luaW_check_formula(lua_State* L, int idx, bool allow_str);
