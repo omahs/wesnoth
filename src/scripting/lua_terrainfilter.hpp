@@ -53,7 +53,7 @@ namespace lua_mapgen
 		std::map<std::string, std::set<map_location>> known_sets_;
 		std::unique_ptr<filter_impl> impl_;
 	};
-	
+
 	using filter_ptr = std::unique_ptr<filter, std::function<void(filter*)>>;
 
 	std::string register_filter_metatables(lua_State *L);
