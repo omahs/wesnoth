@@ -219,7 +219,7 @@ variant luaW_tofaivariant(lua_State* L, int i) {
 }
 
 /**
- * Get a formula from the stack. If @allow_str is true, it compiles a formula string if found.
+ * Get a formula from the stack. If @a allow_str is true, it compiles a formula string if found.
  * Otherwise, it must be an already-compiled formula.
  * Raises an error if a formula is not found, or if there's an error in compilation.
  * Thus, it never returns a null pointer.
