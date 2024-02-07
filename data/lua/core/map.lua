@@ -381,10 +381,15 @@ if wesnoth.kernel_type() == "Mapgen Lua Kernel" then
 		end,
 		---Match hexes from a separate list.
 		---Specify the list in the second argument to wesnoth.map.filter()
-		---@param terrain string
+		---@param x integer
+		---@param y integer
 		---@return terrain_filter_tag
-		find_in =  function(terrain)
-			return { "find_in", terrain }
+		---@overload fun(xs:string, ys:string):terrain_filter_tag
+		---@overload fun(loc:location):terrain_filter_tag
+		---@overload fun(locs:location):terrain_filter_tag
+		---@overload fun(locset_ref:string):terrain_filter_tag
+		find_in =  function(x, y)
+			return { "find_in", x, y }
 		end,
 		---Match hexes within a given distance
 		---@param r integer
