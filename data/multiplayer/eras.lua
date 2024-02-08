@@ -21,7 +21,7 @@ res.quick_4mp_leaders = function(args)
 	end
 end
 
-res.turns_over_advantage = function()
+res.turns_over_advantage = function(title)
 	local show_turns_over_advantage = wml.variables["show_turns_over_advantage"]
 	if show_turns_over_advantage == nil then
 		show_turns_over_advantage = wesnoth.scenario.mp_settings and (wesnoth.scenario.mp_settings.mp_campaign == "")
@@ -79,24 +79,31 @@ res.turns_over_advantage = function()
 		end
 	end
 
+	local result = nil
+
 	if #winning_sides == 1 then
 		-- po: In the end-of-match summary, there's a single side that's won.
 		local comparison_text = _ "<span foreground='$side_color'>Side $side_number</span> has the advantage."
 		side_comparison = side_comparison .. "\n" .. comparison_text:vformat{side_number = winning_sides[1], side_color = winners_color}
+		result = winning_sides[1]
 	elseif #winning_sides == 2 then
 		-- po: In the end-of-match summary, there's a two-way tie (this is only used for exactly two winning teams)
 		-- Separated from the three-or-more text in case a language differentiates "two sides" vs "three sides".
 		local comparison_text = _ "Sides $side_number and $other_side_number are tied."
 		side_comparison = side_comparison .. "\n" .. comparison_text:vformat{side_number = winning_sides[1], other_side_number = winning_sides[2]}
+		result = "tie"
 	elseif #winning_sides ~= 0 then
 		local winners = stringx.format_conjunct_list("", winning_sides)
 		-- po: In the end-of-match summary, three or more teams have all tied for the best score. $winners contains the result of formatting the conjunct list.
 		local comparison_text = _ "Sides $winners are tied."
 		side_comparison = side_comparison .. "\n" .. comparison_text:vformat{winners = winners}
+		result = "tie"
 	end
 	-- if #winning_sides==0, then every side either has no units or has a negative score
 
 	-- po: "Turns Over", meaning "turn limit reached" is the title of the end-of-match summary dialog
-	local a, b = gui.show_popup(_ "dialog^Turns Over", side_comparison)
+	title = title or _ "dialog^Turns Over"
+	local a, b = gui.show_popup(title, side_comparison)
+	return result
 end
 return res
