@@ -7,7 +7,7 @@ local M = wesnoth.map
 -- frequently. Backward compatibility cannot be guaranteed at this time in
 -- development releases, but it is of course easily possible to copy a function
 -- from a previous release directly into an add-on if it is needed there.
---
+
 -- Invisible units ('viewing_side' and 'ignore_visibility' parameters):
 -- With their default settings, the ai_helper functions use the vision a player of
 -- the respective side would see, that is, they assume no knowledge of invisible
@@ -19,7 +19,11 @@ local M = wesnoth.map
 --   - If neither parameter is given and a function takes a parameter linked to a specific side,
 --     such as a side number or a unit, as input, vision of that side is used.
 --   - For some functions that take no other side-related input, 'viewing_side' is made a required parameter.
---
+
+---@class ai_helper_visibility_opts
+---@field viewing_side? integer If set, vision for that side is used. It must be set to a valid side number. Typically defaults to the side of a specified unit if not set.
+---@field ignore_visibility? boolean If set to true, all units on the map are seen and shroud is ignored. This overrides 'viewing_side'.
+
 -- Path finding:
 -- All ai_helper functions disregard shroud for path finding (while still ignoring
 -- hidden units correctly) as of Wesnoth 1.13.7. This is consistent with default
@@ -97,7 +101,7 @@ end
 ---Take map (location set) and put labels containing 'value' onto the map
 ---Print 'nan' if element exists but is not a number.
 ---@param map location_set The labels to place on the map.
----@param cfg ai_debug_label_opts table with optional configuration parameters:
+---@param cfg? ai_debug_label_opts table with optional configuration parameters:
 function ai_helper.put_labels(map, cfg)
 
     cfg = cfg or {}
@@ -1090,23 +1094,16 @@ function ai_helper.get_units_with_attacks(filter)
     }
 end
 
+---Get units that are visible to the specified side
+---@param viewing_side integer Must be set to a valid side number. If visibility is to be ignored, use wesnoth.units.find_on_map() instead.
+---@param filter WMLTable Standard unit filter WML table for the units
+---@return table
 function ai_helper.get_visible_units(viewing_side, filter)
-    -- Get units that are visible to side @viewing_side
-    --
-    -- Required parameters:
-    -- @viewing_side: must be set to a valid side number. If visibility is to be
-    --   ignored, use wesnoth.units.find_on_map() instead.
-    --
-    -- Optional parameters:
-    -- @filter: Standard unit filter WML table for the units
-    --   Example 1: { type = 'Orcish Grunt' }
-    --   Example 2: { { "filter_location", { x = 10, y = 12, radius = 5 } } }
-
     ai_helper.check_viewing_side(viewing_side)
 
     local filter_plus_vision = {}
     if filter then filter_plus_vision = ai_helper.table_copy(filter) end
-    table.insert(filter_plus_vision, { "filter_vision", { side = viewing_side, visible = 'yes' } })
+    table.insert(filter_plus_vision, wml.tag.filter_vision { side = viewing_side, visible = 'yes' })
 
     local units = {}
     local all_units = wesnoth.units.find_on_map{}
@@ -1119,13 +1116,11 @@ function ai_helper.get_visible_units(viewing_side, filter)
     return units
 end
 
+---Check whether a unit exists and is visible to the specified side
+---@param viewing_side integer Must be set to a valid side number
+---@param unit unit
+---@return boolean
 function ai_helper.is_visible_unit(viewing_side, unit)
-    -- Check whether @unit exists and is visible to side @viewing_side.
-    --
-    -- Required parameters:
-    -- @viewing_side: must be set to a valid side number
-    -- @unit: unit proxy table
-
     ai_helper.check_viewing_side(viewing_side)
 
     if (not unit) then return false end
@@ -1137,25 +1132,20 @@ function ai_helper.is_visible_unit(viewing_side, unit)
     return true
 end
 
-function ai_helper.get_attackable_enemies(filter, side, cfg)
-    -- Attackable enemies are defined as being being
-    --   - enemies of the side defined in @side,
-    --   - not petrified
-    --   - and visible to the side as defined in @cfg.viewing_side and @cfg.ignore_visibility.
-    --   - have at least one adjacent hex that is not inside an area to avoid
-    -- For speed reasons, this is done separately, rather than calling ai_helper.get_visible_units().
-    --
-    -- Optional parameters:
-    -- @filter: Standard unit filter WML table for the enemies
-    --   Example 1: { type = 'Orcish Grunt' }
-    --   Example 2: { { "filter_location", { x = 10, y = 12, radius = 5 } } }
-    -- @side: side number, if side other than current side is to be considered
-    -- @cfg: table with optional configuration parameters:
-    --   viewing_side: see comments at beginning of this file. Defaults to @side.
-    --   ignore_visibility: see comments at beginning of this file. Defaults to nil.
-    --   avoid_map: if given, an enemy is included only if it does not have at least one
-    --     adjacent hex outside of avoid_map
+---@class get_enemies_opts : ai_helper_visibility_opts
+---@field avoid_map location_set If given, an enemy is included only if it does not have at least one adjacent hex outside of avoid_map
 
+---Attackable enemies are defined as being being
+---  - enemies of the specified side,
+---  - not petrified
+---  - and visible to the side as defined in cfg.viewing_side and cfg.ignore_visibility.
+---  - have at least one adjacent hex that is not inside an area to avoid
+---For speed reasons, this is done separately, rather than calling ai_helper.get_visible_units().
+---@param filter? WMLTable Standard unit filter WML table for the enemies
+---@param side? integer Side number, if side other than current side is to be considered
+---@param cfg? get_enemies_opts
+---@return table
+function ai_helper.get_attackable_enemies(filter, side, cfg)
     side = side or wesnoth.current.side
     local viewing_side = cfg and cfg.viewing_side or side
     ai_helper.check_viewing_side(viewing_side)
@@ -1197,16 +1187,13 @@ function ai_helper.get_attackable_enemies(filter, side, cfg)
     return enemies
 end
 
+---Check if a unit exists, is an enemy of the specifed side, is visible to the side as defined
+---by cfg.viewing_side and cfg.ignore_visibility and is not petrified.
+---@param unit unit
+---@param side? integer Side number, defaults to current side.
+---@param cfg? ai_helper_visibility_opts
+---@return boolean
 function ai_helper.is_attackable_enemy(unit, side, cfg)
-    -- Check if @unit exists, is an enemy of @side, is visible to the side as defined
-    -- by @cfg.viewing_side and @cfg.ignore_visibility and is not petrified.
-    --
-    -- Optional parameters:
-    -- @side: side number, defaults to current side.
-    -- @cfg: table with optional configuration parameters:
-    --   viewing_side: see comments at beginning of this file. Defaults to @side.
-    --   ignore_visibility: see comments at beginning of this file. Defaults to nil.
-
     side = side or wesnoth.current.side
     local viewing_side = cfg and cfg.viewing_side or side
     ai_helper.check_viewing_side(viewing_side)
@@ -1223,17 +1210,14 @@ function ai_helper.is_attackable_enemy(unit, side, cfg)
     return true
 end
 
+---Return the enemy closest to the specified location and its distance from the location, or to the
+---leader of the specified side if a location is not specified
+---@param loc? location
+---@param side? integer Number of side for which to find enemy; defaults to current side
+---@param cfg ai_helper_visibility_opts
+---@return nil
+---@return number
 function ai_helper.get_closest_enemy(loc, side, cfg)
-    -- Return the enemy closest to @loc and its distance from @loc, or to the
-    -- leader of side with number @side if @loc is not specified
-    --
-    -- Optional parameters:
-    -- @loc: location in format { x , y }
-    -- @side: number of side for which to find enemy; defaults to current side
-    -- @cfg: table with optional configuration parameters:
-    --   viewing_side: see comments at beginning of this file. Defaults to @side.
-    --   ignore_visibility: see comments at beginning of this file. Defaults to nil.
-
     side = side or wesnoth.current.side
 
     local enemies = ai_helper.get_attackable_enemies({}, side, cfg)
@@ -1258,9 +1242,10 @@ function ai_helper.get_closest_enemy(loc, side, cfg)
     return closest_enemy, closest_distance
 end
 
+---Get the cost of the cheapest unit that can be recruited by the current side.
+---@param leader unit if given, find the cheapest recruit cost for this leader, otherwise for the combination of all leaders of the current side
+---@return number
 function ai_helper.get_cheapest_recruit_cost(leader)
-    -- Optional input @leader: if given, find the cheapest recruit cost for this leader,
-    --   otherwise for the combination of all leaders of the current side
     local recruit_ids = {}
     for _,recruit_id in ipairs(wesnoth.sides[wesnoth.current.side].recruit) do
         table.insert(recruit_ids, recruit_id)
@@ -1393,8 +1378,7 @@ function ai_helper.enemy_moves()
     return enemy_moves
 end
 
----@class ai_next_hop_opts : path_options
----@field ignore_visibility? boolean See comment at top of file
+---@class ai_next_hop_opts : path_options, ai_helper_visibility_opts
 ---@field ignore_own_units? boolean If set to true, then own units that can move out of the way are ignored.
 ---@field path? location[] If given, find the next hop along this path, rather than doing new path finding In this case, it is assumed that the path is possible, in other words, that cost has been checked.
 ---@field avoid_map? location_set A location set with the hexes the unit is not allowed to step on.
@@ -1519,18 +1503,20 @@ function ai_helper.next_hop(unit, x, y, cfg)
     return next_hop, nh_cost
 end
 
-function ai_helper.can_reach(unit, x, y, cfg)
-    -- Returns true if hex (@x, @y) is unoccupied (by a visible unit), or
-    -- at most occupied by unit on same side as @unit that can move away
-    -- (can be modified with options below)
-    --
-    -- @cfg: table with optional configuration parameters:
-    --   moves = 'max' use max_moves instead of current moves
-    --   ignore_units: if true, ignore both own and enemy units
-    --   exclude_occupied: if true, exclude hex if there's a unit there, irrespective of value of 'ignore_units'
-    --   viewing_side: see comments at beginning of this file. Defaults to side of @unit
-    --   ignore_visibility: see comments at beginning of this file. Defaults to nil.
+---@class can_reach_opts : ai_helper_visibility_opts
+---@field moves? "'max'" Use max_moves instead of current moves
+---@field ignore_units? boolean If true, ignore both own and enemy units
+---@field exclude_occupied? boolean If true, exclude hex if there's a unit there, irrespective of value of 'ignore_units'
 
+---Returns true if a hex is unoccupied (by a visible unit), or
+---at most occupied by unit on same side as the seeking unit that can move away
+---(can be modified with options below)
+---@param unit unit
+---@param x integer
+---@param y integer
+---@param cfg can_reach_opts
+---@return boolean
+function ai_helper.can_reach(unit, x, y, cfg)
     cfg = cfg or {}
     local viewing_side = cfg.viewing_side or unit.side
     ai_helper.check_viewing_side(viewing_side)
@@ -1576,21 +1562,21 @@ function ai_helper.can_reach(unit, x, y, cfg)
     return can_reach
 end
 
+---@class reachmap_opts : reach_options, ai_helper_visibility_opts
+---@field moves? "'max'" If set to 'max', unit MP is set to max_moves before calculation
+---@field exclude_occupied? boolean If true, exclude hexes that have units on them; defaults to false, in which case hexes with own units with moves > 0 are included
+---@field avoid_map? location_set Location set of hexes to be excluded
+
+---Get all reachable hexes for @unit that are actually available; that is,
+---hexes that, at most, have own units on them which can move out of the way.
+---By contrast, wesnoth.paths.find_reach also includes hexes with allied units on
+---them, as well as own unit with no moves left.
+---Returned array is a location set, with values set to remaining MP after the
+---unit moves to the respective hexes.
+---@param unit unit
+---@param cfg reachmap_opts
+---@return location_set
 function ai_helper.get_reachmap(unit, cfg)
-    -- Get all reachable hexes for @unit that are actually available; that is,
-    -- hexes that, at most, have own units on them which can move out of the way.
-    -- By contrast, wesnoth.paths.find_reach also includes hexes with allied units on
-    -- them, as well as own unit with no moves left.
-    -- Returned array is a location set, with values set to remaining MP after the
-    -- unit moves to the respective hexes.
-    --
-    -- @cfg: table with optional configuration parameters:
-    --   moves: if set to 'max', unit MP is set to max_moves before calculation
-    --   viewing_side: see comments at beginning of this file. Defaults to side of @unit
-    --   ignore_visibility: see comments at beginning of this file. Defaults to nil.
-    --   exclude_occupied: if true, exclude hexes that have units on them; defaults to
-    --     false, in which case hexes with own units with moves > 0 are included
-    --   avoid_map: location set of hexes to be excluded
     --   plus all other parameters to wesnoth.paths.find_reach
 
     local viewing_side = cfg and cfg.viewing_side or unit.side
@@ -1638,7 +1624,7 @@ end
 ---Same as ai_helper.get_reachmap with exclude_occupied = true
 ---This function is now redundant, but we keep it for backward compatibility.
 ---@param unit unit
----@param cfg table
+---@param cfg reachmap_opts
 ---@return location_set
 function ai_helper.get_reachable_unocc(unit, cfg)
 
@@ -1648,8 +1634,7 @@ function ai_helper.get_reachable_unocc(unit, cfg)
     return ai_helper.get_reachmap(unit, cfg_GRU)
 end
 
----@class shrouded_path_opts : path_options
----@field ignore_visibility? boolean See comment at the top of file
+---@class shrouded_path_opts : path_options, ai_helper_visibility_opts
 
 ---Same as wesnoth.paths.find_path, just that it works under shroud as well while still ignoring invisible units. It does this by using ignore_visibility=true and taking invisible units off the map for the path finding process.
 ---@param unit unit The unit who wants to move.
@@ -1705,14 +1690,23 @@ function ai_helper.find_path_with_shroud(unit, x, y, cfg)
     return path, cost
 end
 
+---Custom cost function for path finding which takes hexes to be avoided into account.
+---See the notes in function ai_helper.find_path_with_avoid()
+---
+---For efficiency reasons, this function requires quite a few arguments to be passed to it.
+---Function ai_helper.find_path_with_avoid() does most of this automatically, but the custom cost
+---function can be accessed directly also for even more customized behavior.
+---@param x integer
+---@param y integer
+---@param prev_cost integer
+---@param unit unit
+---@param avoid_map location_set
+---@param ally_map location_set
+---@param enemy_map location_set
+---@param enemy_zoc_map location_set
+---@param strict_avoid boolean
+---@return integer
 function ai_helper.custom_cost_with_avoid(x, y, prev_cost, unit, avoid_map, ally_map, enemy_map, enemy_zoc_map, strict_avoid)
-    -- Custom cost function for path finding which takes hexes to be avoided into account.
-    -- See the notes in function ai_helper.find_path_with_avoid()
-    --
-    -- For efficiency reasons, this function requires quite a few arguments to be passed to it.
-    -- Function ai_helper.find_path_with_avoid() does most of this automatically, but the custom cost
-    -- function can be accessed directly also for even more customized behavior.
-
     if enemy_map and enemy_map:get(x, y) then
         return ai_helper.no_path
     end
@@ -1819,30 +1813,34 @@ function ai_helper.custom_cost_with_avoid(x, y, prev_cost, unit, avoid_map, ally
     return move_cost_int / 100000
 end
 
-function ai_helper.find_path_with_avoid(unit, x, y, avoid_map, options)
-    -- Find path while taking hexes to be avoided into account. In its default setting,
-    -- it also finds the path so that the unit does not end a move on a hex with an allied
-    -- unit, which is one of the main shortcomings of the default path finder.
-    --
-    -- Important notes:
-    --  - There are two modes of avoiding hexes: the default for which the unit may move through
-    --    the avoided area but not end a move on it; and a "strict avoid" mode for which the
-    --    path may not lead through the avoided area at all.
-    --  - Not ending turns on hexes with allied units is meant to with units moving around each other,
-    --    but this can cause problems in narrow passages. It can therefore also be turned off.
-    --  - This cost function does not provide all the configurability of the default path finder.
-    --    The functionality is as follows:
-    --     - Hexes with visible enemy units are always excluded, and enemy ZoC is taken into account
-    --     - Invisible enemies are always ignored (including those under shroud)
-    --     - Hexes with higher terrain defense are preferred, all else being equal.
-    --
-    -- OPTIONAL INPUTS:
-    --  @options: Note that this is not the same as the @cfg table that can be passed to wesnoth.paths.find_path().
-    --    Possible fields are:
-    --     @strict_avoid: if 'true', trigger the "strict avoid" mode described above
-    --     @ignore_enemies: if 'true', enemies will not be taken into account.
-    --     @ignore_allies: if 'true', allied units will not be taken into account.
+---@class path_with_avoid_opts
+---@field strict_avoid? boolean If 'true', trigger the "strict avoid" mode described above
+---@field ignore_enemies? boolean If 'true', enemies will not be taken into account.
+---@field ignore_allies? boolean If 'true', allied units will not be taken into account.
 
+---Find path while taking hexes to be avoided into account. In its default setting,
+-- it also finds the path so that the unit does not end a move on a hex with an allied
+-- unit, which is one of the main shortcomings of the default path finder.
+--
+-- Important notes:
+--  - There are two modes of avoiding hexes: the default for which the unit may move through
+--    the avoided area but not end a move on it; and a "strict avoid" mode for which the
+--    path may not lead through the avoided area at all.
+--  - Not ending turns on hexes with allied units is meant to with units moving around each other,
+--    but this can cause problems in narrow passages. It can therefore also be turned off.
+--  - This cost function does not provide all the configurability of the default path finder.
+--    The functionality is as follows:
+--     - Hexes with visible enemy units are always excluded, and enemy ZoC is taken into account
+--     - Invisible enemies are always ignored (including those under shroud)
+--     - Hexes with higher terrain defense are preferred, all else being equal.
+---@param unit unit
+---@param x integer
+---@param y integer
+---@param avoid_map location_set
+---@param options path_with_avoid_opts
+---@return nil
+---@return integer
+function ai_helper.find_path_with_avoid(unit, x, y, avoid_map, options)
     options = options or {}
 
     -- This needs to be done separately, otherwise a path that only goes a short time into the
@@ -1886,22 +1884,18 @@ function ai_helper.find_path_with_avoid(unit, x, y, avoid_map, options)
     })
 end
 
-function ai_helper.find_best_move(units, rating_function, cfg)
-    -- Find the best move and best unit based on @rating_function
-    -- INPUTS:
-    --  @units: (required) single unit or table of units
-    --  @rating_function: (required) function(x, y) with rating function for the hexes the unit can reach
-    --  @cfg: table with optional configuration parameters:
-    --    labels: if set, put labels with ratings onto map
-    --    no_random: if set, do not add random value between 0.0001 and 0.0099 to each hex
-    --    plus all the possible parameters for ai_helper.get_reachable_unocc()
-    --
-    -- OUTPUTS:
-    --  best_hex: format { x, y }
-    --  best_unit: unit for which this rating function produced the maximum value
-    --  max_rating: the rating found for this hex/unit combination
-    -- If no valid moves were found, best_unit and best_hex are nil
+---@class best_move_opts : reachmap_opts
+---@field labels? boolean If set, put labels with ratings onto map
+---@field no_random? boolean If set, do not add random value between 0.0001 and 0.0099 to each hex
 
+---Find the best move and best unit based on a rating_function
+---@param units unit|unit[] single unit or list of units
+---@param rating_function fun(x:integer, y:integer):integer rating function for the hexes the unit can reach
+---@param cfg any
+---@return location? #best_hex - nil if no valid moves were found
+---@return unit? #best_unit - unit for which this rating function produced the maximum value; nil if no valid moves were found
+---@return number #max_rating - the rating found for this hex/unit combination
+function ai_helper.find_best_move(units, rating_function, cfg)
     cfg = cfg or {}
 
     -- If this is an individual unit, turn it into an array
@@ -1930,23 +1924,18 @@ function ai_helper.find_best_move(units, rating_function, cfg)
     return best_hex, best_unit, max_rating
 end
 
----@class move_out_of_way_opts : reach_options
+---@class move_out_of_way_opts : reach_options, ai_helper_visibility_opts
+---@field dx? integer The direction in which moving out of the way is preferred
+---@field dy? integer The direction in which moving out of the way is preferred
+---@field avoid_map? location_set If given, the hexes in avoid_map are excluded
+---@field labels? boolean if set, display labels of the rating for each hex the unit can reach
 
----
+---Move aunit to the best close location.
+---Main rating is the moves the unit still has left after that
 ---@param ai ailib
 ---@param unit unit
 ---@param cfg move_out_of_way_opts
 function ai_helper.move_unit_out_of_way(ai, unit, cfg)
-    -- Move @unit to the best close location.
-    -- Main rating is the moves the unit still has left after that
-    -- Other, configurable, parameters are given to function in @cfg:
-    --   dx, dy: the direction in which moving out of the way is preferred
-    --   avoid_map (location set): if given, the hexes in avoid_map are excluded
-    --   labels: if set, display labels of the rating for each hex the unit can reach
-    --   viewing_side: see comments at beginning of this file. Defaults to side of @unit.
-    --   ignore_visibility: see comments at beginning of this file. Defaults to nil.
-    --   all other optional parameters to wesnoth.paths.find_reach()
-
     cfg = cfg or {}
     local viewing_side = cfg.viewing_side or unit.side
     ai_helper.check_viewing_side(viewing_side)
