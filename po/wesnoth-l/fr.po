@@ -4839,7 +4839,7 @@ msgstr "Comment est-ce possible ?"
 #~ "Il existe sous la structure un réseau de catacombes qui relient les "
 #~ "quatre tours au donjon central. L'agrandissement de ces catacombes, ainsi "
 #~ "que des siècles de guerre, ont rendu les consolidations nécessaires pour "
-#~ "éviter que le le donjon ne s'écroule."
+#~ "éviter que le donjon ne s'écroule."
 
 #~ msgid "axe"
 #~ msgstr "hache"
